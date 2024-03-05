@@ -11,6 +11,8 @@ streamlit = "^1.31.1"
 pandas = "^2.2.1"
 langchain-experimental = "^0.0.53"
 langchain-openai = "^0.0.8"
+pydantic = "^2.6.3"
+langchain = "^0.1.11"
 
 
 [build-system]

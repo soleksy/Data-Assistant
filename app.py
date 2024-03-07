@@ -6,13 +6,30 @@ import pandas as pd
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 from langchain_openai import ChatOpenAI
 
-from tools.lineplot import LinePlot
+from tools.codeplot import PlotGeneratorTool
 
-session_keys = ['api_key', 'form_submitted', 'file_uploaded', 'file_name', 'clicked', 'history' ]
-default_values = ['', False, False, '', False , {
-    "human":[],
-    "assistant":[]
-}]
+session_keys = ['api_key',
+                'form_submitted', 
+                'file_uploaded', 
+                'file_processed',
+                'df', 
+                'file_name', 
+                'clicked', 
+                'history' ]
+
+default_values = ['', 
+                  False, 
+                  False, 
+                  False,
+                  None, 
+                  '', 
+                  False , 
+                  {
+                    "human":[],
+                    "assistant":[]
+                  }
+                ]
+
 for key, value in zip(session_keys, default_values):
     if key not in st.session_state:
         st.session_state[key] = value
@@ -22,11 +39,43 @@ st.title('Data Science Assistant')
 def openai_form_submitted():
     st.session_state['form_submitted'] = True
 
-def initialize_llm():
-    llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0 , api_key=st.session_state['api_key'])
+@st.cache_resource()
+def initialize_llm(api_key):
+    llm = ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0 , api_key=api_key)
     return llm
 
-prefix_prompt = "When asked to make a plot always use CreateLinePlot tool. The plot will be automatically generated don't use sandbox to show it."
+@st.cache_resource()
+def create_pandas_agent(_llm, df):
+
+    pandas_agent = create_pandas_dataframe_agent(
+        _llm, 
+        df, 
+        verbose=True, 
+        max_iterations=3, 
+        agent_type='openai-tools',
+        extra_tools=[PlotGeneratorTool()],
+        return_intermediate_steps=True,
+        prefix_prompt=prefix_prompt
+    )
+    return pandas_agent
+
+def get_llm_response(pandas_agent, prompt):
+
+    with st.spinner('The assistant is thinking...'):
+        response = pandas_agent.invoke(prompt)
+        return response
+    
+@st.cache_data()
+def load_and_process_file(loaded_file):
+
+    with st.spinner('Loading and processing the file...'):
+        import time
+        time.sleep(2)  
+        df = pd.read_csv(loaded_file, low_memory=False)
+        return df
+
+prefix_prompt = "When asked to make a ANY plot always use PlotGeneratorTool tool. The plot will be automatically generated never use sandbox to show it."
+test_prefix_prompt = "When creating plots, import streamlit as st and instead of using plt.show() use st.image() to display the plot."
 
 with st.sidebar:
     st.write('*Welcome to the Data Science Assistant!*')
@@ -61,21 +110,16 @@ with st.sidebar:
                         f.write(loaded_file.getbuffer())
 
                 st.session_state['file_uploaded'] = True
-                df = pd.read_csv(loaded_file, low_memory=False)
-                st.dataframe(df)
+
+                if not st.session_state['file_processed']:
+                    df = load_and_process_file(loaded_file)
+                    st.session_state['df'] = df
+
+                st.dataframe(st.session_state['df'])
                 st.session_state['file_name'] = loaded_file.name
-                llm = initialize_llm()
 
-                pandas_agent = create_pandas_dataframe_agent(
-                    llm, 
-                    df, 
-                    verbose=True, 
-                    max_iterations=3, 
-                    agent_type='openai-tools',  
-                    extra_tools=[LinePlot()],
-                    return_intermediate_steps=True,
-                    prefix=prefix_prompt)
-
+                llm = initialize_llm(st.session_state['api_key'])
+                pandas_agent = create_pandas_agent(llm, st.session_state['df'])
 
 if st.session_state['file_uploaded']:
     with st.chat_message("assistant"):
@@ -89,33 +133,37 @@ if st.session_state['file_uploaded']:
                 if a_message:
                     if 'response' in a_message:
                         with st.chat_message("assistant"):
-                            st.write(a_message['response'])
-                        if 'plot' in a_message:
-                            st.image(a_message['plot'])
+                            if 'plot' in a_message:
+                                st.image(a_message['plot'])
+                                st.write(a_message['response'])
+                            else:
+                                st.write(a_message['response'])
     if prompt:
         st.session_state['history']['human'].append(prompt)
         with st.chat_message("human"):
             st.write(prompt)
 
         try:
-            response = pandas_agent.invoke(prompt)
+            response = get_llm_response(pandas_agent, prompt)
             rendered = False
-            print(response)
+
             current_dir = os.path.dirname(__file__)
             plots_dir = os.path.join(current_dir, 'plots')
 
             if 'intermediate_steps' in response:
                 for step in response['intermediate_steps']:
                     action, result = step 
-                    if action.tool == 'line_plot':
-                        plot_filename = action.tool_input['filename']
+                    if action.tool == 'plot_generator':
+                        
+                        plot_filename = str(result)+'.png'
                         plot_path = os.path.join(plots_dir, plot_filename)
                         
                         st.session_state['history']['assistant'].append({"response": response['output'] , "plot": plot_path})
                         rendered = True
                         with st.chat_message("assistant"):
-                            st.write(response['output'])
                             st.image(plot_path)
+                            st.write(response['output'])
+                            
             if not rendered:
                 st.session_state['history']['assistant'].append({"response": response['output']})
                 with st.chat_message("assistant"):

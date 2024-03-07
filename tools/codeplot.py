@@ -1,4 +1,5 @@
 import os
+import uuid
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 import pandas as pd
@@ -7,14 +8,13 @@ from typing import Type
 
 class PlotGeneratorInput(BaseModel):
     code: str = Field(..., description="The code to generate the plot")
-    file_name: str = Field(..., description="The name of the file to save the plot, always add .png to the filename")
 
 class PlotGeneratorTool(BaseTool):
     name = "plot_generator"
     description = "A tool that takes code and generates a plot."
     args_schema: Type[BaseModel] = PlotGeneratorInput
 
-    def _run(self, code: str, file_name: str) -> str:
+    def _run(self, code: str) -> str:
 
         project_root_dir = os.path.dirname(os.path.dirname(__file__))
         files_dir = os.path.join(project_root_dir, 'files')
@@ -28,10 +28,13 @@ class PlotGeneratorTool(BaseTool):
 
             if 'plt' in namespace:
                 plt = namespace['plt']
+                unique_id = uuid.uuid4()
+                file_name = f"{unique_id}.png"
+
                 plot_path = os.path.join(plots_dir, file_name)
                 plt.savefig(plot_path)
                 plt.close()
-                return f"Plot generated. Don't use sandbox to show it, it has been already presented."
+                return unique_id
             else:
                 return "No plot object found in the provided code."
 

@@ -15,7 +15,8 @@ session_keys = ['api_key',
                 'df', 
                 'file_name', 
                 'clicked', 
-                'history' ]
+                'history',
+                ]
 
 default_values = ['', 
                   False, 
@@ -38,10 +39,11 @@ st.title('Data Science Assistant')
 
 def openai_form_submitted():
     st.session_state['form_submitted'] = True
+    st.cache_resource.clear()
 
-@st.cache_resource()
-def initialize_llm(api_key):
-    llm = ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0 , api_key=api_key)
+@st.cache_resource
+def initialize_llm():
+    llm = ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=1 , api_key=st.session_state['api_key'])
     return llm
 
 @st.cache_resource()
@@ -55,7 +57,7 @@ def create_pandas_agent(_llm, df):
         agent_type='openai-tools',
         extra_tools=[PlotGeneratorTool()],
         return_intermediate_steps=True,
-        prefix_prompt=prefix_prompt
+        prefix="When asked to generate any plots always use PlotGeneratorTool."
     )
     return pandas_agent
 
@@ -74,9 +76,11 @@ def load_and_process_file(loaded_file):
         df = pd.read_csv(loaded_file, low_memory=False)
         return df
 
-prefix_prompt = "When asked to make a ANY plot always use PlotGeneratorTool tool. The plot will be automatically generated never use sandbox to show it."
-test_prefix_prompt = "When creating plots, import streamlit as st and instead of using plt.show() use st.image() to display the plot."
-
+def show_code_expander(code):
+    with st.expander("Show code"):
+        st.markdown(f'''
+                    ```python
+                    {code}''', unsafe_allow_html=True)
 with st.sidebar:
     st.write('*Welcome to the Data Science Assistant!*')
     st.write('This chatbot is designed to assist you with your data exploratory tasks.')
@@ -118,13 +122,16 @@ with st.sidebar:
                 st.dataframe(st.session_state['df'])
                 st.session_state['file_name'] = loaded_file.name
 
-                llm = initialize_llm(st.session_state['api_key'])
+                llm = initialize_llm()
                 pandas_agent = create_pandas_agent(llm, st.session_state['df'])
+
 
 if st.session_state['file_uploaded']:
     with st.chat_message("assistant"):
         st.write("Hello!👋 How can I help you today?")
+
     prompt = st.chat_input("Ask me anything!")
+
 
     for h_message, a_message in zip(st.session_state['history']['human'], st.session_state['history']['assistant']):
                 if h_message:
@@ -136,6 +143,8 @@ if st.session_state['file_uploaded']:
                             if 'plot' in a_message:
                                 st.image(a_message['plot'])
                                 st.write(a_message['response'])
+                            if 'code' in a_message:
+                                show_code_expander(a_message['code'])
                             else:
                                 st.write(a_message['response'])
     if prompt:
@@ -158,12 +167,22 @@ if st.session_state['file_uploaded']:
                         plot_filename = str(result)+'.png'
                         plot_path = os.path.join(plots_dir, plot_filename)
                         
-                        st.session_state['history']['assistant'].append({"response": response['output'] , "plot": plot_path})
+                        st.session_state['history']['assistant'].append({"response": response['output'] , "plot": plot_path , "code": action.tool_input['code']})
                         rendered = True
                         with st.chat_message("assistant"):
                             st.image(plot_path)
                             st.write(response['output'])
-                            
+                            code = action.tool_input['code']
+                            show_code_expander(code)
+
+                    if action.tool == 'python_repl_ast':
+                        st.session_state['history']['assistant'].append({"response": response['output'] , "code": action.tool_input['query']})
+                        rendered = True
+                        with st.chat_message("assistant"):
+                            st.write(response['output'])
+                            code = action.tool_input['query']
+                            show_code_expander(code)
+                
             if not rendered:
                 st.session_state['history']['assistant'].append({"response": response['output']})
                 with st.chat_message("assistant"):
@@ -172,3 +191,5 @@ if st.session_state['file_uploaded']:
         except Exception as e:
             response = f"An error occurred: {e}"
             st.write(response)
+
+

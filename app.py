@@ -2,16 +2,19 @@ import streamlit as st
 
 from components.sidebar.sidebar import SideBar
 from components.chat.chat import Chat
+from agent.agent import Agent
 
 st.title('Data Science Assistant')
 
 def main():
 
-    sidebar = SideBar()
-    pandas_agent = sidebar.render()
+    agent = Agent()
+    
+    sidebar = SideBar(agent=agent)
+    sidebar.render()
 
     if sidebar.get_state('file_uploaded'):
-        chat = Chat(pandas_agent)
+        chat = Chat(agent=agent)
         chat.render()
 
 if __name__ == "__main__":

@@ -1,9 +1,12 @@
 import os
 import uuid
-from langchain.tools import BaseTool
-from pydantic import BaseModel, Field
+
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
+
+from langchain.tools import BaseTool
+from pydantic import BaseModel, Field
 from typing import Type
 
 class PlotGeneratorInput(BaseModel):
@@ -11,7 +14,7 @@ class PlotGeneratorInput(BaseModel):
 
 class PlotGeneratorTool(BaseTool):
     name = "plot_generator"
-    description = "A tool that takes code and generates a plot."
+    description = "A Python shell to create plots using matplotlib. Use this to execute python commands when planning to generate plots using matplotlib."
     args_schema: Type[BaseModel] = PlotGeneratorInput
 
     def _run(self, code: str) -> str:
@@ -23,17 +26,17 @@ class PlotGeneratorTool(BaseTool):
 
         df = pd.read_csv(file_path, low_memory=False)
         try:
-            namespace = {'df' : df}
+            namespace = {'df' : df , 'plt': plt}
             exec(code, namespace)
 
             if 'plt' in namespace:
-                plt = namespace['plt']
+                plt_ = namespace['plt']
                 unique_id = uuid.uuid4()
                 file_name = f"{unique_id}.png"
 
                 plot_path = os.path.join(plots_dir, file_name)
-                plt.savefig(plot_path)
-                plt.close()
+                plt_.savefig(plot_path)
+                plt_.close()
                 return unique_id
             else:
                 return "No plot object found in the provided code."

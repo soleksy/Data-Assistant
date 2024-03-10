@@ -2,16 +2,13 @@ import os
 import streamlit as st
 import pandas as pd
 
-from langchain_openai import ChatOpenAI
-from tools.codeplot import PlotGeneratorTool
-from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
-
 from langchain.agents import AgentExecutor
-
+from agent.agent import Agent
 
 class SideBar:
 
-    def __init__(self):
+    def __init__(self , agent: Agent):
+        self.agent = agent
         self.states = [
                     'api_key',
                     'form_submitted', 
@@ -20,6 +17,7 @@ class SideBar:
                     'df', 
                     'file_name', 
                     'clicked',
+                    'agent'
                     ]
         self.default_values = [
                                 '', 
@@ -28,12 +26,13 @@ class SideBar:
                                 False,
                                 None, 
                                 '', 
-                                False
+                                False,
+                                None
                     ]
         for state, default in zip(self.states, self.default_values):
             if state not in st.session_state:
                 st.session_state[state] = default
-    
+        
     def set_state(self, key: str, value: any) -> None:
         st.session_state[key] = value
     
@@ -44,12 +43,6 @@ class SideBar:
         st.session_state['form_submitted'] = True
         st.cache_resource.clear()
 
-        
-    @st.cache_resource
-    def _initialize_llm(_self) -> ChatOpenAI:
-        llm = ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0.2 , api_key=st.session_state['api_key'])
-        return llm
-    
     @st.cache_data()
     def _load_and_process_file(_self, _loaded_file) -> pd.DataFrame:
 
@@ -59,22 +52,7 @@ class SideBar:
             df = pd.read_csv(_loaded_file, low_memory=False)
             return df
     
-    @st.cache_resource()
-    def _create_pandas_agent(_self, _llm, df) -> AgentExecutor:
 
-        pandas_agent = create_pandas_dataframe_agent(
-            _llm, 
-            df, 
-            verbose=True, 
-            max_iterations=3, 
-            agent_type='openai-tools',
-            extra_tools=[PlotGeneratorTool()],
-            return_intermediate_steps=True,
-            prefix="When asked to generate any plots always use PlotGeneratorTool.",
-            TimeoutError=20
-        )
-        return pandas_agent
-            
 
     def render(self) -> AgentExecutor:
         with st.sidebar:
@@ -118,5 +96,5 @@ class SideBar:
                         st.dataframe(st.session_state['df'])
                         st.session_state['file_name'] = loaded_file.name
 
-                        llm = self._initialize_llm()
-                        return self._create_pandas_agent(llm, st.session_state['df'])
+  
+                        return self.agent._create_pandas_agent(df=st.session_state['df'])

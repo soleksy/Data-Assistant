@@ -8,7 +8,7 @@ st.title('Data Science Assistant')
 
 def main():
 
-    agent = Agent()
+    agent = Agent(memory=6)
     
     sidebar = SideBar(agent=agent)
     sidebar.render()

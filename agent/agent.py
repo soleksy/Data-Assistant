@@ -1,13 +1,17 @@
+import json
 import streamlit as st
 
 from langchain_openai import ChatOpenAI
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 
 from tools.codeplot import PlotGeneratorTool
+from components.chat.chathistory import ChatHistory
 
 class Agent:
-    def __init__(self):
+    def __init__(self , memory: int = 5):
         self.states = ['agent']
+        self.memory = memory
+        self.chat_history = ChatHistory()
         self.default_values = [None]
         for state, default in zip(self.states, self.default_values):
             if state not in st.session_state:
@@ -36,6 +40,7 @@ class Agent:
         st.session_state['agent'] = pandas_agent
 
     def _get_llm_response(self, prompt):
+        history = self.chat_history.retrieve_messages(n=self.memory)
         with st.spinner('The assistant is thinking...'):
-            response = st.session_state['agent'].invoke(prompt)
+            response = st.session_state['agent'].invoke(json.dumps(history) + prompt)
             return response

@@ -55,6 +55,29 @@ class ChatHistory:
                     if step.code:
                         self.show_code_expander(step.code)
 
+    def retrieve_messages(self, n: int) -> dict:
+            history = self.get_history()
+            last_n_messages = history[-n:]
+            conversation_history = {'conversation_history': []}
+
+            for message in last_n_messages:
+                if isinstance(message, HumanChatMessage):
+                    conversation_history['conversation_history'].append({'user': message.message})
+                else:
+                    for step in message:
+                        code = ''
+                        response = ''
+
+                        if step.code:
+                            code = step.code
+                        if step.response:
+                            response = step.response
+
+                        assistant_response = {'response' : response , 'code' : code}
+                        conversation_history['conversation_history'].append({'assistant': assistant_response})
+            
+            return conversation_history
+    
     def render_history(self) -> None:
 
         for message in self.get_history():

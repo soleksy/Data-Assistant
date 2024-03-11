@@ -1,5 +1,5 @@
 import os
-
+import uuid
 import streamlit as st
 
 from components.chat.chathistory import ChatHistory
@@ -40,10 +40,10 @@ class Chat:
                 for step in response['intermediate_steps']:
                     action, result = step
                     if action.tool == 'plot_generator':
-                        plot_filename = str(result)+'.png'
-                        plot_path = os.path.join(plots_dir, plot_filename)
-                        
-                        intermediate_steps.append({'response': response['output'], 'plot_path': plot_path, 'code': action.tool_input['code']})
+                        plot_filename = str(result)+'.png' if result==uuid.UUID else None
+                        if plot_filename:
+                            plot_path = os.path.join(plots_dir, plot_filename)
+                            intermediate_steps.append({'response': response['output'], 'plot_path': plot_path, 'code': action.tool_input['code']})
 
                     if action.tool == 'python_repl_ast':
                         intermediate_steps.append({'response': response['output'], 'plot_path': None, 'code': action.tool_input['query']})

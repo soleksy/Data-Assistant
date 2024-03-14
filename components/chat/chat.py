@@ -40,7 +40,7 @@ class Chat:
                 for step in response['intermediate_steps']:
                     action, result = step
                     if action.tool == 'plot_generator':
-                        plot_filename = str(result)+'.png' if result==uuid.UUID else None
+                        plot_filename = str(result)+'.png' if type(result)==uuid.UUID else None
                         if plot_filename:
                             plot_path = os.path.join(plots_dir, plot_filename)
                             intermediate_steps.append({'response': response['output'], 'plot_path': plot_path, 'code': action.tool_input['code']})
